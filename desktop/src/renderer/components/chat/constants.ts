@@ -9,9 +9,10 @@ export const MODEL_PROVIDER_OPTIONS = [
   ['tinker', 'Tinker'],
   ['tinfoil', 'Tinfoil'],
   ['hosted_vllm', 'OpenAI-compatible endpoint'],
+  ['omlx', 'oMLX (Apple Silicon)'],
   ['lm_studio', 'LM Studio'],
 ] as const;
-export const MODEL_ENDPOINT_PROVIDERS = new Set(['hosted_vllm', 'lm_studio']);
+export const MODEL_ENDPOINT_PROVIDERS = new Set(['hosted_vllm', 'omlx', 'lm_studio']);
 
 export const blankSensingModel = (): TutorModelOption => ({
   id: 'sensing',

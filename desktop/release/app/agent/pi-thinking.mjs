@@ -1,6 +1,6 @@
 /** Gemini's thinking-off mapping can emit MINIMAL, which newer models reject. */
 export function isHostedQwen(model) {
-  return /^hosted_vllm\/(?:.*\/)?qwen3[.\-]/i.test(model);
+  return /^(?:hosted_vllm|omlx)\/(?:.*\/)?qwen3[.\-]/i.test(model);
 }
 
 export function chatThinkingLevel(model, configured) {

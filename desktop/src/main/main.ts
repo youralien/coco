@@ -2266,6 +2266,8 @@ async function testModelConnection(
         'TINFOIL_API_KEY',
         'HOSTED_VLLM_API_KEY',
         'HOSTED_VLLM_API_BASE',
+        'OMLX_API_BASE',
+        'OMLX_API_KEY',
         'LM_STUDIO_HOST',
         'OA_TICKET_FILE',
         'OA_DESTINATION',

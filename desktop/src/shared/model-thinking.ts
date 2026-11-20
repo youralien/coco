@@ -25,5 +25,5 @@ export const THINKING_LABELS: Record<ModelThinking, string> = {
 };
 
 export function isHostedQwen(provider: string, model: string): boolean {
-  return provider === 'hosted_vllm' && /^(?:.*\/)?qwen3[.\-]/i.test(model);
+  return ['hosted_vllm', 'omlx'].includes(provider) && /^(?:.*\/)?qwen3[.\-]/i.test(model);
 }

@@ -10,6 +10,7 @@ export type ProviderId =
   | 'tinker'
   | 'tinfoil'
   | 'hosted_vllm'
+  | 'omlx'
   | 'lm_studio'
   | 'open_anonymity';
 
@@ -50,6 +51,7 @@ const PROVIDER_KEY_ENV: Partial<Record<ProviderId, string>> = {
   tinker: 'TINKER_API_KEY',
   tinfoil: 'TINFOIL_API_KEY',
   hosted_vllm: 'HOSTED_VLLM_API_KEY',
+  omlx: 'OMLX_API_KEY',
 };
 
 export const PROVIDERS: Record<
@@ -62,6 +64,7 @@ export const PROVIDERS: Record<
   anthropic: { label: 'Anthropic', requiresKey: true, privacy: 'cloud' },
   tinker: { label: 'Tinker', requiresKey: true, privacy: 'cloud' },
   tinfoil: { label: 'Tinfoil', requiresKey: true, privacy: 'confidential' },
+  omlx: { label: 'oMLX', requiresKey: false, privacy: 'local' },
   hosted_vllm: {
     label: 'OpenAI-compatible endpoint',
     requiresKey: false,
@@ -91,7 +94,7 @@ const connectionCredentialId = (
   role: 'sensing' | 'tutor',
   connection: ModelConnection,
 ) =>
-  connection.provider === 'hosted_vllm' && role === 'tutor'
+  ['hosted_vllm', 'omlx'].includes(connection.provider) && role === 'tutor'
     ? `${credentialId(role, connection.provider)}:${connection.id}`
     : credentialId(role, connection.provider);
 
@@ -117,7 +120,7 @@ function normalizeConnection(value: unknown): ModelConnection | null {
   const expectedPrefix =
     item.provider === 'open_anonymity' ? 'oa/' : `${item.provider}/`;
   if (
-    (item.provider === 'hosted_vllm' || item.provider === 'tinker') &&
+    ['hosted_vllm', 'omlx', 'tinker'].includes(item.provider) &&
     !normalizedModel.startsWith(expectedPrefix)
   ) {
     normalizedModel = `${expectedPrefix}${normalizedModel}`;
@@ -319,6 +322,9 @@ function connectionEnv(
   if (connection.provider === 'hosted_vllm' && connection.baseUrl) {
     env.HOSTED_VLLM_API_BASE = connection.baseUrl;
   }
+  if (connection.provider === 'omlx') {
+    env.OMLX_API_BASE = connection.baseUrl || fallbackEnv.OMLX_API_BASE || 'http://127.0.0.1:8000/v1';
+  }
   if (connection.provider === 'tinker' && fallbackEnv.TINKER_BASE_URL) {
     env.TINKER_BASE_URL = fallbackEnv.TINKER_BASE_URL;
   }
@@ -335,16 +341,19 @@ export function buildRoleModelEnvironments(
 ): { sensingEnv: Record<string, string>; tutorEnv: Record<string, string> } {
   const hostedRoutes = Object.fromEntries(
     config.tutors
-      .filter((item) => item.provider === 'hosted_vllm')
+      .filter((item) => ['hosted_vllm', 'omlx'].includes(item.provider))
       .map((item) => {
         const env = connectionEnv(item, 'tutor', credentials, fallbackEnv);
         return [
           item.model,
           {
             api_base:
-              env.HOSTED_VLLM_API_BASE || fallbackEnv.HOSTED_VLLM_API_BASE,
+              item.provider === 'omlx'
+                ? env.OMLX_API_BASE
+                : env.HOSTED_VLLM_API_BASE || fallbackEnv.HOSTED_VLLM_API_BASE,
             // A nonempty placeholder prevents LiteLLM from borrowing another key.
-            api_key: env.HOSTED_VLLM_API_KEY || 'coco-no-api-key',
+            api_key: (item.provider === 'omlx' ? env.OMLX_API_KEY : env.HOSTED_VLLM_API_KEY) ||
+              'coco-no-api-key',
           },
         ];
       }),

@@ -308,5 +308,8 @@
       ".erb/dll/**"
     ],
     "logLevel": "quiet"
+  },
+  "allowScripts": {
+    "electron@39.8.10": true
   }
 }

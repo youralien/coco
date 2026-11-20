@@ -93,7 +93,11 @@ def get_litellm_completion(
     # routing per request; mutating os.environ would race with other chats and
     # instant suggestions running in this same process.
     routes_json = os.environ.get("COCO_HOSTED_MODEL_ROUTES")
-    if model.startswith("hosted_vllm/") and routes_json:
+    if model.startswith("omlx/"):
+        kwargs["model"] = "openai/" + model.removeprefix("omlx/")
+        kwargs["api_base"] = os.environ.get("OMLX_API_BASE") or "http://127.0.0.1:8000/v1"
+        kwargs["api_key"] = os.environ.get("OMLX_API_KEY") or "coco-no-api-key"
+    if model.startswith(("hosted_vllm/", "omlx/")) and routes_json:
         route = json.loads(routes_json).get(model)
         if route is None or not route.get("api_base"):
             raise ValueError("No endpoint configured for the selected model.")

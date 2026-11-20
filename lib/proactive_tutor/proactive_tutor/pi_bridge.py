@@ -178,7 +178,7 @@ def create_pi_router(get_tutor: Callable[[], TutorSystem | None]) -> APIRouter:
         model = tutor.tutor_agent.model
         if not req.stream:
             raise HTTPException(400, "The agent bridge requires streaming")
-        qwen = bool(re.match(r"hosted_vllm/(?:.*/)?qwen3[.\-]", model, re.I))
+        qwen = bool(re.match(r"(?:hosted_vllm|omlx)/(?:.*/)?qwen3[.\-]", model, re.I))
         thinking = req.chat_template_kwargs or ThinkingOptions()
 
         async def stream():

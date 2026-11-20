@@ -107,7 +107,7 @@ export default function useModelSetup() {
           setSensingModel({
             ...config.sensing,
             model: String(config.sensing.model).replace(
-              /^(?:hosted_vllm|tinker)\//,
+              /^(?:hosted_vllm|omlx|tinker)\//,
               '',
             ),
             apiKey: '',
@@ -116,7 +116,7 @@ export default function useModelSetup() {
         setTutorModels(
           config.tutors.map((item: any) => ({
             ...item,
-            model: String(item.model).replace(/^(?:hosted_vllm|tinker)\//, ''),
+            model: String(item.model).replace(/^(?:hosted_vllm|omlx|tinker)\//, ''),
             apiKey: '',
             baseUrl: item.baseUrl ?? '',
           })),
@@ -156,7 +156,7 @@ export default function useModelSetup() {
       tutorModels.forEach((item) => {
         if (item.apiKey.trim())
           credentials[
-            item.provider === 'hosted_vllm'
+            ['hosted_vllm', 'omlx'].includes(item.provider)
               ? `tutor:${item.provider}:${item.id}`
               : `tutor:${item.provider}`
           ] = item.apiKey;

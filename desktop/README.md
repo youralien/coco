@@ -2,6 +2,11 @@
 
 The Electron + React shell that hosts Coco's avatar, chat, and onboarding UI. It spawns the Python backend services (`sensing` and `proactive_tutor`) as child processes and communicates with them over local HTTP.
 
+Use Node.js 24 for desktop development. Node.js 26 breaks the current
+Electron rebuild CLI and Electron binary extraction. From `desktop`, run
+`nvm install` and `nvm use` if you manage Node with nvm, then run
+`npm install` and `npm start`.
+
 ### Local agent execution
 
 Chat runs through the bundled pi harness. It can read, edit, and write files and

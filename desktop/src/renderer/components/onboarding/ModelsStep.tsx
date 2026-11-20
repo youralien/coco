@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import PiProviderSettings from '../chat/PiProviderSettings';
 const ENDPOINT_OPTIONS = [
   ['hosted_vllm', 'OpenAI-compatible endpoint'],
+  ['omlx', 'oMLX (Apple Silicon)'],
   ['lm_studio', 'LM Studio (local)'],
   ['tinfoil', 'Tinfoil (confidential)'],
   ['tinker', 'Tinker'],
@@ -17,7 +18,7 @@ interface PiModel {
   name: string;
   input?: string[];
 }
-const ENDPOINT_PROVIDERS = new Set(['hosted_vllm', 'lm_studio']);
+const ENDPOINT_PROVIDERS = new Set(['hosted_vllm', 'omlx', 'lm_studio']);
 
 export interface ModelDraft {
   id: string;
@@ -74,7 +75,7 @@ function ModelFields({
   let modelPlaceholder = sensing
     ? 'Vision model ID (provider/model)'
     : 'Model ID (provider/model)';
-  if (value.provider === 'hosted_vllm') {
+  if (['hosted_vllm', 'omlx'].includes(value.provider)) {
     modelPlaceholder = 'Exact model ID returned by /v1/models';
   }
   return (
@@ -113,7 +114,7 @@ function ModelFields({
               ...value,
               provider: catalog ? 'pi' : source,
               catalogProvider: catalog ? source.slice(8) : undefined,
-              model: '',
+              model: source === 'omlx' ? 'Qwen3.6-35B-A3B-oQ4e-mtp' : '',
               apiKey: '',
               baseUrl: '',
             });
@@ -219,7 +220,9 @@ function ModelFields({
           placeholder={
             value.provider === 'lm_studio'
               ? 'Host (default localhost:1234)'
-              : 'OpenAI-compatible base URL, ending in /v1'
+              : value.provider === 'omlx'
+                ? 'Base URL (default http://127.0.0.1:8000/v1)'
+                : 'OpenAI-compatible base URL, ending in /v1'
           }
           onChange={(event) => update('baseUrl', event.target.value)}
         />
@@ -230,7 +233,7 @@ function ModelFields({
           type="password"
           value={value.apiKey}
           placeholder={
-            value.provider === 'hosted_vllm' ? 'API key (optional)' : 'API key'
+            ['hosted_vllm', 'omlx'].includes(value.provider) ? 'API key (optional)' : 'API key'
           }
           autoComplete="off"
           onChange={(event) => update('apiKey', event.target.value)}
