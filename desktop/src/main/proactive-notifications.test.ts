@@ -10,6 +10,7 @@ jest.mock('electron', () => ({
       listeners,
       loadURL: jest.fn(),
       show: jest.fn(),
+      showInactive: jest.fn(),
       destroy: jest.fn(),
       isDestroyed: () => false,
       webContents: { send: jest.fn() },
@@ -66,6 +67,19 @@ it('ignores responses to replaced invitations and starts the accepted task once'
   respond({}, { inviteId: second.inviteId, outcome: 'accepted' });
   expect(test.startSession).toHaveBeenCalledTimes(1);
   expect(test.startSession).toHaveBeenCalledWith('Second task', 120);
+});
+
+it('shows notifications without taking focus from the user', () => {
+  const { controller } = setup();
+  controller.showNotification({ message: 'Hint', actionLabel: 'Open' });
+  const mock = BrowserWindow as unknown as jest.Mock;
+  expect(mock.mock.calls[0][0]).toEqual(
+    expect.objectContaining({ acceptFirstMouse: true }),
+  );
+  const window = mock.mock.results[0].value;
+  window.listeners.get('ready-to-show')();
+  expect(window.showInactive).toHaveBeenCalledTimes(1);
+  expect(window.show).not.toHaveBeenCalled();
 });
 
 it('does not let a replaced bubble deliver stale content or clear the current window', () => {

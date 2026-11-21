@@ -132,6 +132,9 @@ export default function createProactiveNotifications(deps: Dependencies) {
       minWidth: adjustable ? 320 : undefined,
       minHeight: adjustable ? 180 : undefined,
       skipTaskbar: true,
+      // The popup appears without taking focus, so the first click on it
+      // should act on the card instead of only focusing the window.
+      acceptFirstMouse: true,
       webPreferences: { preload: deps.preload() },
     });
 
@@ -142,7 +145,9 @@ export default function createProactiveNotifications(deps: Dependencies) {
     const window = notificationWindow;
     window.on('ready-to-show', () => {
       if (window !== notificationWindow || window.isDestroyed()) return;
-      window.show();
+      // Unprompted popups must not steal focus from whatever the user is
+      // typing into; they can click the card to interact with it.
+      window.showInactive();
       window.webContents.send('notification', {
         ...payload,
         adjustable,
