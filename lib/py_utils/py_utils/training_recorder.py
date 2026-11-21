@@ -249,7 +249,8 @@ class TrainingRecorder:
         ``kind``: ``shown`` (an actionable suggestion was displayed) | ``engage``
         (accepted a suggestion) | ``dismiss`` (declined a suggestion) |
         ``need_help`` (asked for help on a calm/``progress`` bubble where nothing
-        was suggested — a false-negative signal) | ``thumbs_up`` | ``thumbs_down``.
+        was suggested — a false-negative signal) | ``copy`` (copied the
+        suggested prompt — an implicit positive) | ``thumbs_up`` | ``thumbs_down``.
         ``surface``: ``bubble`` | ``chat``. An "ignore" is a ``shown`` row with no
         matching ``engage``/``dismiss`` and is derived offline.
         """

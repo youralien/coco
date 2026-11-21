@@ -65,6 +65,7 @@ export const S: Record<string, React.CSSProperties> = {
   suggestionActionTitle: { marginTop: 8, paddingTop: 8, borderTop: `1px solid ${BORDER}` },
   suggestionPrompt: { whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--coco-color-text-secondary)' },
   suggestionActions: { display: 'flex', gap: 6, flexWrap: 'wrap' },
+  suggestionRunRow: { display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 },
   errBubble: { background: 'var(--coco-color-danger-soft)', color: 'var(--coco-color-danger)', padding: 'var(--coco-space-3) var(--coco-space-4)', borderRadius: 'var(--coco-radius-control)', fontSize: 'var(--coco-text-body)', border: '1px solid var(--coco-color-danger-border)' },
   retryBtn: { marginTop: 7, border: '1px solid #fca5a5', background: 'var(--coco-color-surface)', color: 'var(--coco-color-danger)', borderRadius: 'var(--coco-radius-control)', padding: '4px 10px', fontSize: 'var(--coco-text-control)', fontWeight: 700, cursor: 'pointer', fontFamily: FONT },
   thumbRow: { display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 },

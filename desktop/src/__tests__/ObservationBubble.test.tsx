@@ -196,14 +196,17 @@ describe('ObservationBubble controls', () => {
     );
   });
 
-  it('offers only Run with Coco for delegation', () => {
+  it('offers Run with Coco and a copy icon for delegation', () => {
     const onRun = jest.fn();
+    const sendMessage = jest.fn();
+    (window as any).electron = { ipcRenderer: { sendMessage } };
     render(
       <ObservationBubble
         onRunSuggestion={onRun}
         onChatAboutSuggestion={jest.fn()}
         bubble={{
           status: 'inefficient',
+          observationId: 'obs-copy',
           phrase: 'Delegate this task',
           fadingOut: false,
           suggestion: {
@@ -231,5 +234,24 @@ describe('ObservationBubble controls', () => {
     expect(onRun).toHaveBeenCalledTimes(1);
     expect(actions).not.toContain('Open Claude');
     expect(actions).not.toContain('Open Coco Chat');
+
+    // Copying the prompt is logged as implicit positive feedback.
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompt' }));
+    expect(sendMessage).toHaveBeenCalledWith('suggestion-action', {
+      copyText: 'Explain this error.',
+    });
+    expect(sendMessage).toHaveBeenCalledWith(
+      'training-feedback',
+      expect.objectContaining({
+        kind: 'copy',
+        surface: 'bubble',
+        observation_id: 'obs-copy',
+        text: 'Explain this error.',
+      }),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Prompt copied' }),
+    ).toBeInTheDocument();
+    delete (window as any).electron;
   });
 });

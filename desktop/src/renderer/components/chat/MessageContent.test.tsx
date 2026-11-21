@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { TutorMessage } from './MessageContent';
+import { SuggestionMessage, TutorMessage } from './MessageContent';
 
 const guidance =
   '<guidance>Check **study populations** before using these papers.\n\n1. Match the learners.\n2. Check the evidence.\n\nWhich paper fits your course?</guidance><four_d_dimension>discernment</four_d_dimension><teaching_depth>introduce</teaching_depth>';
@@ -161,4 +161,42 @@ test('copies the complete code while its preview remains collapsed', async () =>
   expect(
     await screen.findByRole('button', { name: 'Copied ✓' }),
   ).toBeInTheDocument();
+});
+
+describe('SuggestionMessage', () => {
+  it('copies a delegation prompt and logs it as positive feedback', () => {
+    const sendMessage = jest.fn();
+    (window as any).electron = { ipcRenderer: { sendMessage } };
+    const onRun = jest.fn();
+    render(
+      <SuggestionMessage
+        suggestion={{
+          observationId: 'obs-chat',
+          kind: 'delegate',
+          title: 'Ask an AI tool',
+          prompt: 'Explain this error.',
+          copyText: 'Explain this error.',
+        }}
+        folded={false}
+        onToggleFold={jest.fn()}
+        onRun={onRun}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run with Coco' }));
+    expect(onRun).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompt' }));
+    expect(sendMessage).toHaveBeenCalledWith('suggestion-action', {
+      copyText: 'Explain this error.',
+    });
+    expect(sendMessage).toHaveBeenCalledWith(
+      'training-feedback',
+      expect.objectContaining({
+        kind: 'copy',
+        surface: 'chat',
+        observation_id: 'obs-chat',
+      }),
+    );
+    delete (window as any).electron;
+  });
 });

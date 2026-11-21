@@ -8,6 +8,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import type { InstantSuggestion } from './observation-types';
 import RatingButtons from './RatingButtons';
+import CopyPromptButton, { CopyPromptFeedback } from './CopyPromptButton';
 import {
   buildFrameworkOverview,
   buildSuggestionExplanation,
@@ -254,6 +255,7 @@ export function NotificationBubble({
   suggestion,
   onChatAboutSuggestion,
   onRunSuggestion,
+  getCopyFeedback,
   suggestionRating,
   onRateSuggestion,
   adjustable,
@@ -275,6 +277,8 @@ export function NotificationBubble({
   suggestion?: InstantSuggestion;
   onChatAboutSuggestion?: () => void;
   onRunSuggestion?: () => void;
+  /** Feedback context for "copy", the implicit positive signal. */
+  getCopyFeedback?: () => CopyPromptFeedback;
   suggestionRating?: 'up' | 'down' | null;
   onRateSuggestion?: (rating: 'up' | 'down') => void;
   adjustable?: boolean;
@@ -370,7 +374,7 @@ export function NotificationBubble({
       labels={{ up: 'Good suggestion', down: 'Not helpful' }}
     />
   ) : null;
-  const chatAction = (
+  const chatButton = (
     <button
       type="button"
       className="toast-action toast-chat-action"
@@ -379,6 +383,21 @@ export function NotificationBubble({
       {runWithCoco ? 'Run with Coco' : 'Chat with Coco'}
     </button>
   );
+  // A delegation prompt can also be copied to use elsewhere.
+  const chatAction =
+    runWithCoco && suggestion?.kind === 'delegate' ? (
+      <div className="toast-chat-actions">
+        <CopyPromptButton
+          text={suggestion.prompt || suggestion.copyText || ''}
+          getFeedback={() =>
+            getCopyFeedback?.() ?? { surface: 'notification' }
+          }
+        />
+        {chatButton}
+      </div>
+    ) : (
+      chatButton
+    );
   const showChatActionInPager =
     isRevealedSuggestion && isFrameworkPager && !isFrameworkOverview;
   // Without the page row, the thumbs lead the footer instead.
@@ -865,6 +884,11 @@ export default function NotificationView() {
         suggestion={payload.suggestion}
         onChatAboutSuggestion={() => handleChatAboutSuggestion()}
         onRunSuggestion={() => handleChatAboutSuggestion(true)}
+        getCopyFeedback={() => ({
+          surface: 'notification',
+          observationId: payload.observationId,
+          status: payload.status,
+        })}
         suggestionRating={suggestionRating}
         onRateSuggestion={rateInstantSuggestion}
         adjustable={payload.adjustable}

@@ -311,9 +311,11 @@ describe('instant suggestion actions', () => {
     expect(onRate).toHaveBeenCalledWith('down');
   });
 
-  it('offers only Run with Coco for delegation, without external-tool or copy actions', () => {
+  it('offers Run with Coco and a copy icon for delegation, without external-tool actions', () => {
     const onChat = jest.fn();
     const onRun = jest.fn();
+    const sendMessage = jest.fn();
+    (window as any).electron = { ipcRenderer: { sendMessage } };
     render(
       <NotificationBubble
         message="Ask an AI tool"
@@ -330,14 +332,34 @@ describe('instant suggestion actions', () => {
         }}
         onChatAboutSuggestion={onChat}
         onRunSuggestion={onRun}
+        getCopyFeedback={() => ({
+          surface: 'notification',
+          observationId: 'obs-copy',
+          status: 'inefficient',
+        })}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Run with Coco' }));
     expect(onRun).toHaveBeenCalledTimes(1);
     expect(onChat).not.toHaveBeenCalled();
     expect(
-      screen.queryByRole('button', { name: /Chat with Coco|Open |Copy/ }),
+      screen.queryByRole('button', { name: /Chat with Coco|Open / }),
     ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompt' }));
+    expect(sendMessage).toHaveBeenCalledWith('suggestion-action', {
+      copyText: 'Explain this error.',
+    });
+    expect(sendMessage).toHaveBeenCalledWith(
+      'training-feedback',
+      expect.objectContaining({
+        kind: 'copy',
+        surface: 'notification',
+        observation_id: 'obs-copy',
+        status: 'inefficient',
+      }),
+    );
+    delete (window as any).electron;
   });
 
   it('puts "← Why" and the action in one row on the action page', () => {

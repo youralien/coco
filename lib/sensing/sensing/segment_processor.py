@@ -1279,6 +1279,7 @@ class AiTutoringProcessor(SegmentProcessor):
     # Terminal reactions (an explicit accept/decline) outrank a plain "shown".
     _TERMINAL_REACTIONS = (
         "engage",
+        "copy",
         "dismiss",
         "need_help",
         "thumbs_up",
@@ -1306,6 +1307,7 @@ class AiTutoringProcessor(SegmentProcessor):
 
     _REACTION_LABEL = {
         "engage": "user ACCEPTED (clicked 'Help me with this')",
+        "copy": "user COPIED the suggested prompt to use it (a good suggestion)",
         "dismiss": "user DISMISSED this suggestion",
         "need_help": "user ASKED FOR HELP despite this calm status — a MISSED need (you under-called here)",
         "shown": "shown to user — no response (ignored)",

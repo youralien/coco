@@ -90,6 +90,7 @@ def _atomic_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
 
 def _supported_signal_kind(kind: object) -> bool:
     return kind in {
+        "copy",
         "dismiss",
         "reveal",
         "thumbs_up",
@@ -153,7 +154,7 @@ def process_signal_step(
         output_path,
         derived,
         replace_kinds=frozenset(
-            {"abstain", "dismiss", "reveal", "thumbs_up", "thumbs_down"}
+            {"abstain", "copy", "dismiss", "reveal", "thumbs_up", "thumbs_down"}
         ),
     )
     signal_counts = Counter(signal.kind for signal in stored)

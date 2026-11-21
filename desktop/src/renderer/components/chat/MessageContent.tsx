@@ -13,6 +13,7 @@ import { parseGuidance, makeMessageId } from './message-format';
 import { S } from './styles';
 import './MessageContent.css';
 import ResponseCodeBlock from './ResponseCodeBlock';
+import CopyPromptButton from '../CopyPromptButton';
 
 // A fenced code block with a Copy button that stays put while the code
 // scrolls sideways.
@@ -228,14 +229,25 @@ export function SuggestionMessage({
         </button>
       </div>
       {onRun && (
-        <button
-          type="button"
-          style={S.exampleBtn}
-          disabled={runDisabled}
-          onClick={onRun}
-        >
-          Run with Coco
-        </button>
+        <div style={S.suggestionRunRow}>
+          <button
+            type="button"
+            style={{ ...S.exampleBtn, marginTop: 0 }}
+            disabled={runDisabled}
+            onClick={onRun}
+          >
+            Run with Coco
+          </button>
+          {suggestion.kind === 'delegate' && (
+            <CopyPromptButton
+              text={suggestion.prompt || suggestion.copyText}
+              getFeedback={() => ({
+                surface: 'chat',
+                observationId: suggestion.observationId,
+              })}
+            />
+          )}
+        </div>
       )}
       {/* Unfolded, the card shows the pop-up's two pages: why, then the action. */}
       {!folded &&
