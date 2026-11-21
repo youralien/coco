@@ -9,6 +9,7 @@ import {
   buildSuggestionExplanation,
 } from './framework-overview';
 import RatingButtons from './RatingButtons';
+import CopyPromptButton from './CopyPromptButton';
 
 export interface BubbleState {
   status: ObservationStatus;
@@ -333,6 +334,17 @@ export default function ObservationBubble({
           >
             {runWithCoco ? 'Run with Coco' : 'Chat with Coco'}
           </button>
+          {runWithCoco && suggestion.kind === 'delegate' && (
+            <CopyPromptButton
+              text={suggestion.prompt || suggestion.copyText || ''}
+              getFeedback={() => ({
+                surface: 'bubble',
+                observationId: bubble.observationId,
+                status,
+                latencyS: (Date.now() - suggestionShownAt.current) / 1000,
+              })}
+            />
+          )}
         </div>
       )}
 

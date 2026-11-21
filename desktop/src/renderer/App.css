@@ -1616,6 +1616,26 @@
   height: 24px;
 }
 
+/* Copy-prompt icon beside "Run with Coco"; shows a check once copied. */
+.coco-copy-btn {
+  flex: none;
+}
+
+.coco-copy-btn.is-copied {
+  color: var(--coco-color-primary);
+}
+
+.bubble-tool-actions .coco-copy-btn {
+  align-self: center;
+  margin-top: var(--coco-space-2);
+}
+
+.toast-chat-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .toast-cancel {
   padding: 5px var(--coco-space-3);
   font-size: var(--coco-text-secondary);

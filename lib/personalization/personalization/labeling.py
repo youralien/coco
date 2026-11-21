@@ -22,7 +22,11 @@ from personalization.schemas import (
     stable_id,
 )
 from personalization.signals import derive_short_window_signals
-from personalization.signals.user_feedback import FEEDBACK_POLICIES
+from personalization.signals.user_feedback import (
+    ACCEPTING_KINDS,
+    FEEDBACK_POLICIES,
+    is_superseded_copy,
+)
 from personalization.utils.llm_io import parse_json_object
 from personalization.utils.llm_resilience import (
     MAX_REVISION_PROMPT_CHARS,
@@ -164,11 +168,15 @@ def label_signals_for_moment(
 ) -> list[LabelSignal]:
     """Collect signals that apply to ``moment``."""
     signals: list[LabelSignal] = []
-    has_reveal = any(event.kind == "engage" for event in moment.feedback_events)
+    has_reveal = any(
+        event.kind in ACCEPTING_KINDS for event in moment.feedback_events
+    )
     for event in moment.feedback_events:
-        # The close action after a reveal only closes the expanded content; it
+        # The close action after a reveal or copy only closes the suggestion; it
         # does not undo that positive interaction. A thumbs-down still does.
         if event.kind == "dismiss" and has_reveal:
+            continue
+        if is_superseded_copy(event, moment.feedback_events):
             continue
         label = _feedback_label_signal(moment, event)
         if label is not None:
@@ -281,7 +289,7 @@ def _label_rationale(score: float, signals: list[LabelSignal]) -> str:
 
 def _target_suggestion(moment: CandidateMoment) -> str:
     for event in moment.feedback_events:
-        if event.kind == "thumbs_up" and event.text:
+        if event.kind in {"thumbs_up", "copy"} and event.text:
             return event.text
     for call in moment.tutor_calls_after:
         if call.tutor_output:

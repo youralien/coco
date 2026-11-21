@@ -31,7 +31,11 @@ DEFAULT_SIGNAL_TTL_S = 30 * 60
 #   double-counting the positive outcome; closing revealed content is benign);
 # - asking Coco for help is derived from the surrounding no-intervention moment
 #   by ``missed_opportunities`` instead of trusting a UI click in isolation;
-# - merely showing a suggestion carries no preference information.
+# - merely showing a suggestion carries no preference information;
+# - ``copy`` (copying a suggested prompt to the clipboard) is an implicit
+#   positive: the user took the suggestion to use it. It counts once per
+#   suggestion, an explicit thumbs rating of the same suggestion takes
+#   precedence, and it outranks the weaker derived ``reveal``.
 #
 # - ``polarity`` says whether this event argues that Coco should have helped
 #   here ("positive"), should have stayed quiet ("negative"), or should only be
@@ -74,6 +78,13 @@ FEEDBACK_POLICIES: dict[str, FeedbackPolicy] = {
         fallback_evidence="user dismissed the proactive suggestion",
         label_weight=1.2,
     ),
+    "copy": FeedbackPolicy(
+        polarity="positive",
+        confidence=0.85,
+        scope="task",
+        fallback_evidence="user copied the suggested prompt to use it",
+        label_weight=1.0,
+    ),
     "thumbs_up": FeedbackPolicy(
         polarity="positive",
         confidence=0.9,
@@ -89,6 +100,31 @@ FEEDBACK_POLICIES: dict[str, FeedbackPolicy] = {
         label_weight=1.0,
     ),
 }
+
+
+# Events that show the user acted on a suggestion. Closing the suggestion
+# afterwards is not a rejection.
+ACCEPTING_KINDS = frozenset({"engage", "copy"})
+
+
+def is_superseded_copy(event: FeedbackEvent, group: Iterable[FeedbackEvent]) -> bool:
+    """Whether a ``copy`` event should be ignored in favor of related feedback.
+
+    ``group`` holds the feedback for the same suggestion (observation or
+    message). An explicit thumbs rating is authoritative, and repeated copies
+    of one suggestion count as a single implicit positive.
+    """
+    if event.kind != "copy":
+        return False
+    group = list(group)
+    if any(item.kind in {"thumbs_up", "thumbs_down"} for item in group):
+        return True
+    first_copy = min(
+        (item for item in group if item.kind == "copy"),
+        key=lambda item: item.ts,
+        default=event,
+    )
+    return first_copy is not event
 
 
 def feedback_to_short_window_signal(
@@ -148,7 +184,11 @@ def derive_feedback_signals(
         )
         # Closing an already-revealed suggestion is not rejection by itself.
         # A thumbs-down remains authoritative negative feedback for that reveal.
-        if event.kind == "dismiss" and any(item.kind == "engage" for item in group):
+        if event.kind == "dismiss" and any(
+            item.kind in ACCEPTING_KINDS for item in group
+        ):
+            continue
+        if is_superseded_copy(event, group):
             continue
         signal = feedback_to_short_window_signal(event, ttl_s=ttl_s)
         if signal is not None:
@@ -156,7 +196,7 @@ def derive_feedback_signals(
 
     for (session_id, observation_id), group in grouped.items():
         kinds = {event.kind for event in group}
-        if "engage" not in kinds or "thumbs_down" in kinds or "thumbs_up" in kinds:
+        if "engage" not in kinds or kinds & {"thumbs_down", "thumbs_up", "copy"}:
             continue
         reveal = max(
             (event for event in group if event.kind == "engage"),

@@ -724,8 +724,10 @@ async def _observer_ticker(interval_seconds: float) -> None:
 class FeedbackRequest(BaseModel):
     """A user's explicit reaction to a proactive suggestion.
 
-    ``kind``: ``engage`` | ``dismiss`` | ``thumbs_up`` | ``thumbs_down``.
-    ``surface``: ``bubble`` (avatar observation bubble) | ``chat`` (tutor message).
+    ``kind``: ``engage`` | ``dismiss`` | ``copy`` (copied the suggested prompt,
+    an implicit positive) | ``thumbs_up`` | ``thumbs_down``.
+    ``surface``: ``bubble`` (avatar observation bubble) | ``notification`` |
+    ``chat`` (tutor message).
     """
 
     kind: str

@@ -43,6 +43,7 @@ def test_navigation_feedback_is_not_a_personalization_signal(kind):
     ("kind", "polarity"),
     [
         ("thumbs_up", "positive"),
+        ("copy", "positive"),
         ("thumbs_down", "negative"),
         ("dismiss", "negative"),
         ("abstain", "negative"),
@@ -143,6 +144,31 @@ def test_thumb_up_supplies_positive_without_duplicate_reveal():
 
     assert [(signal.kind, signal.polarity) for signal in signals] == [
         ("thumbs_up", "positive")
+    ]
+
+
+def test_copy_is_one_positive_that_replaces_the_reveal():
+    signals = derive_feedback_signals(
+        [
+            _feedback("engage"),
+            _feedback("copy", ts=2),
+            _feedback("copy", ts=3),
+            _feedback("dismiss", ts=4),
+        ]
+    )
+
+    assert [(signal.kind, signal.polarity, signal.ts) for signal in signals] == [
+        ("copy", "positive", 2)
+    ]
+
+
+def test_explicit_thumb_down_overrides_an_implicit_copy():
+    signals = derive_feedback_signals(
+        [_feedback("engage"), _feedback("copy", ts=2), _feedback("thumbs_down", ts=3)]
+    )
+
+    assert [(signal.kind, signal.polarity) for signal in signals] == [
+        ("thumbs_down", "negative")
     ]
 
 
