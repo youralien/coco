@@ -254,4 +254,49 @@ describe('ObservationBubble controls', () => {
     ).toBeInTheDocument();
     delete (window as any).electron;
   });
+
+  it('offers Chat with Coco and a copy icon for content suggestions', () => {
+    const onChat = jest.fn();
+    const sendMessage = jest.fn();
+    (window as any).electron = { ipcRenderer: { sendMessage } };
+    render(
+      <ObservationBubble
+        onChatAboutSuggestion={onChat}
+        bubble={{
+          status: 'progress',
+          observationId: 'obs-content',
+          phrase: 'Drafting a response',
+          fadingOut: false,
+          suggestion: {
+            kind: 'content',
+            title: 'Draft email',
+            body:
+              'and in algorithmic systems (e.g., the Faact\'25 paper on discriminatory ad delivery showing gaming possibilities; Faact\'25 auditing laws on AI in hiring).',
+            copyText:
+              'and in algorithmic systems (e.g., the Faact\'25 paper on discriminatory ad delivery showing gaming possibilities; Faact\'25 auditing laws on AI in hiring).',
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Chat with Coco' }),
+    ).toBeInTheDocument();
+
+    // Content suggestions should also have a copy button.
+    expect(
+      screen.getByRole('button', { name: 'Copy prompt' }),
+    ).toBeInTheDocument();
+
+    // Copying logs feedback via IPC.
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompt' }));
+    expect(sendMessage).toHaveBeenCalledWith('suggestion-action', {
+      copyText:
+        'and in algorithmic systems (e.g., the Faact\'25 paper on discriminatory ad delivery showing gaming possibilities; Faact\'25 auditing laws on AI in hiring).',
+    });
+    expect(
+      screen.getByRole('button', { name: 'Prompt copied' }),
+    ).toBeInTheDocument();
+    delete (window as any).electron;
+  });
 });
