@@ -37,6 +37,7 @@ from memory import MemoryEngine, ObservationInput
 from py_utils.logging import init_logger
 from py_utils.training_recorder import TrainingRecorder
 from sensing.language import ActionNode, SequenceNode, annotate_high_level_nodes
+from sensing.observer_guard import degenerate_output_reason, probe_image_input
 from sensing.support_feedback import SupportFeedback
 
 logger = init_logger(__name__)
@@ -157,13 +158,49 @@ def build_multimodal_messages(
     return messages
 
 
+OBSERVER_MAX_TOKENS = 4096
+
+
+def _skipped_call_metrics(model: str, error: str) -> LLMCallMetrics:
+    """Metrics for an observer call that was not made."""
+    now = time.time()
+    return LLMCallMetrics(
+        call_id=uuid.uuid4().hex,
+        operation="observer",
+        model=model,
+        provider="",
+        modality="vlm",
+        prompt_tokens=0,
+        completion_tokens=0,
+        cache_creation_input_tokens=0,
+        cache_read_input_tokens=0,
+        input_tokens=0,
+        output_tokens=0,
+        total_tokens=0,
+        duration_ms=0.0,
+        started_at=now,
+        ended_at=now,
+        success=False,
+        error=error,
+    )
+
+
+def _is_inkling(model: str) -> bool:
+    # oMLX serves the checkpoint by its bare name ("omlx/Inkling-2-Mini");
+    # vLLM uses the Hugging Face id ("hosted_vllm/thinkingmachines/Inkling-...").
+    name = (
+        model.split("/", 1)[1] if model.startswith(("hosted_vllm/", "omlx/")) else model
+    )
+    return re.match(r"(?:thinkingmachines/)?inkling", name, re.I) is not None
+
+
 def _observe(
     text_prompt: str,
     image_paths: list[str] | None = None,
     *,
     model: str,
     system_prompt: str = _OBSERVER_PROMPT,
-    max_tokens: int = 4096,
+    max_tokens: int = OBSERVER_MAX_TOKENS,
 ) -> tuple[str, LLMCallMetrics]:
     """Generate an observer response."""
     # user_content: list[TextContent | ImageURLContent] = []
@@ -208,11 +245,7 @@ def _observe(
         "max_tokens": max_tokens,
         "operation": "observer",
     }
-    if (
-        model.removeprefix("hosted_vllm/")
-        .lower()
-        .startswith("thinkingmachines/inkling")
-    ):
+    if _is_inkling(model):
         completion_kwargs["reasoning_effort"] = "none"
     elif model.startswith("hosted_vllm/"):
         # Keep sensing independent of the conversation’s thinking setting.
@@ -623,6 +656,11 @@ class AiTutoringProcessor(SegmentProcessor):
         # judge. Each entry: {"ts": float, "type": str, "obs": str,
         # "observation_id": str}.
         self._observation_history: deque[dict] = deque(maxlen=20)
+        # observer model -> whether its endpoint actually feeds images to it
+        # (None = probe inconclusive). Keyed by model because the observer
+        # model can be switched live via /config/observer_model.
+        self._image_input_ok: dict[str, bool | None] = {}
+        self._image_probe_lock = asyncio.Lock()
         # Optional training-data recorder (set by the server at startup). Logs
         # each observer call so decisions can be linked back to observer I/O.
         self._recorder: TrainingRecorder | None = None
@@ -1061,7 +1099,8 @@ class AiTutoringProcessor(SegmentProcessor):
         if len(self.snapshot_buffer.buffer) >= self.snapshot_buffer.max_size:
             obs, _text, _metrics = await self._handle_observation(type="snapshot")
             self._log(f"[SNAPSHOT OBSERVATION] {obs}\n")
-            self.snapshot_buffer.obs_history.append(obs)
+            if obs:
+                self.snapshot_buffer.obs_history.append(obs)
             self.snapshot_buffer.buffer.clear()
 
     async def _handle_pause(
@@ -1157,18 +1196,35 @@ class AiTutoringProcessor(SegmentProcessor):
         all_image_paths = snapshot_image_paths + hk_paths
 
         observation_id = uuid.uuid4().hex
-        obs, metrics = _observe(
-            text_prompt,
-            all_image_paths,
-            system_prompt=self._observer_prompt,
-            model=self._observer_model,
-        )
-        print(f"[HANDLE OBSERVATION] type: {type}, obs: {obs}")
         self._last_observation_id = observation_id
-        self._support_feedback.observe(observation_id, obs)
+        model = self._observer_model
+        if all_image_paths and await self._image_input_dropped(model):
+            # Every observation would describe a screen the model never saw.
+            obs = ""
+            rejection = "the model endpoint drops image input"
+            metrics = _skipped_call_metrics(model, rejection)
+        else:
+            # The observer call blocks for seconds to minutes; keep it off the
+            # event loop so GUM writes, SSE and HTTP handlers keep running.
+            obs, metrics = await asyncio.to_thread(
+                _observe,
+                text_prompt,
+                all_image_paths,
+                system_prompt=self._observer_prompt,
+                model=model,
+            )
+            rejection = degenerate_output_reason(
+                obs,
+                output_tokens=int(metrics.get("output_tokens", 0) or 0),
+                max_tokens=OBSERVER_MAX_TOKENS,
+            )
+            if rejection:
+                metrics = {**metrics, "success": False, "error": rejection}
 
         # Record the observer call for training BEFORE cleanup, so screenshot
         # retention (when enabled) can copy the files the observer actually saw.
+        # Rejected calls are recorded too (success=False) so they stay
+        # debuggable and can be filtered out of training data.
         if self._recorder is not None:
             self._recorder.log_observation(
                 observation_id=observation_id,
@@ -1176,10 +1232,23 @@ class AiTutoringProcessor(SegmentProcessor):
                 obs_type=type or "unknown",
                 observer_input=text_prompt,
                 observer_output=obs,
-                model=self._observer_model,
+                model=model,
                 screenshot_paths=all_image_paths,
                 llm_metrics=metrics,
             )
+
+        if rejection:
+            # Do not let an unusable observation reach memory, the judge's
+            # history, the UI, or the next observer prompt, where it would
+            # compound into worse output.
+            logger.warning(
+                f"Discarded {type or 'unknown'} observation from {model}: {rejection}"
+            )
+            self._cleanup_consumed_screenshots(snapshot_image_paths)
+            return "", text, metrics
+
+        print(f"[HANDLE OBSERVATION] type: {type}, obs: {obs}")
+        self._support_feedback.observe(observation_id, obs)
 
         # The observer's semantic output is the raw observation for long-term
         # GUM memory. Persist quickly; proposition work runs on MemoryEngine's
@@ -1247,6 +1316,28 @@ class AiTutoringProcessor(SegmentProcessor):
             image_paths=suggestion_image_paths,
         )
         return obs, text, metrics
+
+    async def _image_input_dropped(self, model: str) -> bool:
+        """True only when a probe proved ``model``'s endpoint discards images.
+
+        Probed once per model (cached, including inconclusive results, so a
+        provider that reports no token usage is not re-probed every call).
+        """
+        async with self._image_probe_lock:
+            if model not in self._image_input_ok:
+                ok = await asyncio.to_thread(probe_image_input, model)
+                self._image_input_ok[model] = ok
+                if ok is False:
+                    logger.error(
+                        f"Observer model {model} ignores image input: prompt "
+                        "tokens are identical with and without an image. "
+                        "Observations are disabled for this model until it is "
+                        "switched or the server restarts. Check the model "
+                        "server's vision support for this model."
+                    )
+                elif ok is None:
+                    logger.info(f"Image-input probe for {model} was inconclusive")
+        return self._image_input_ok[model] is False
 
     def _user_name_context_block(self) -> str:
         """Build the observer prompt block containing the preferred user name."""
