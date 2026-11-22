@@ -334,9 +334,16 @@ export default function ObservationBubble({
           >
             {runWithCoco ? 'Run with Coco' : 'Chat with Coco'}
           </button>
-          {runWithCoco && suggestion.kind === 'delegate' && (
+          {/* Copy icon: delegation prompts use it as a separate icon button;
+              content suggestions show it alongside the chat button so the user
+              can copy the body without manually selecting. */}
+          {(runWithCoco || suggestion.kind === 'content') && (
             <CopyPromptButton
-              text={suggestion.prompt || suggestion.copyText || ''}
+              text={
+                suggestion.kind === 'delegate'
+                  ? suggestion.prompt || suggestion.copyText
+                  : suggestion.body || suggestion.copyText || ''
+              }
               getFeedback={() => ({
                 surface: 'bubble',
                 observationId: bubble.observationId,
