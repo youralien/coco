@@ -7,6 +7,9 @@ loaded. Edit the HOST / MODEL constants below to point at a different server
 or model.
 """
 
+import socket
+
+import pytest
 from external_api.lm_studio_api import (
     ImageContent,
     LMStudioMessage,
@@ -16,6 +19,21 @@ from external_api.lm_studio_api import (
 
 HOST = "localhost:1234"
 MODEL = "nvidia/nemotron-3-nano-omni"
+
+
+def _server_reachable(host: str) -> bool:
+    name, port = host.rsplit(":", 1)
+    try:
+        with socket.create_connection((name, int(port)), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _server_reachable(HOST),
+    reason=f"LM Studio integration tests need a server at {HOST}",
+)
 
 
 def test_text_only_query():

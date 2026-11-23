@@ -61,6 +61,11 @@ def test_connection(model: str, include_image: bool) -> str:
     return response.content[0].text  # type: ignore[union-attr]
 
 
+# This module matches pytest's *_test.py pattern but is the app's connection
+# probe, not a test; keep pytest from collecting the probe as a test.
+test_connection.__test__ = False  # type: ignore[attr-defined]
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
