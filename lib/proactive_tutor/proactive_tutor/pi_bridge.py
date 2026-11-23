@@ -11,9 +11,10 @@ from collections.abc import Callable
 from datetime import datetime
 
 from external_api.llm import chat_completion
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from proactive_tutor.audio_input import validate_wav_base64
+from proactive_tutor.pdf_text import MAX_PDF_BYTES, PdfExtractionError, extract_pdf_text
 from proactive_tutor.tutor_system import TutorSystem
 from pydantic import BaseModel, Field
 
@@ -123,6 +124,25 @@ def create_pi_router(get_tutor: Callable[[], TutorSystem | None]) -> APIRouter:
     async def execute(req: ToolRequest, tutor: TutorSystem = Depends(system)):
         agent = tutor.tutor_agent
         return await asyncio.to_thread(agent._execute_tool_call, req.model_dump())
+
+    @router.post("/pdf/extract")
+    async def extract_pdf(
+        request: Request,
+        first_page: int = Query(default=1, ge=1),
+        last_page: int | None = Query(default=None, ge=1),
+    ):
+        # Raw PDF bytes from the runtime's permission-checked read; never a path.
+        data = bytearray()
+        async for chunk in request.stream():
+            data.extend(chunk)
+            if len(data) > MAX_PDF_BYTES:
+                raise HTTPException(413, "PDF is too large to extract.")
+        try:
+            return await asyncio.to_thread(
+                extract_pdf_text, bytes(data), first_page, last_page
+            )
+        except PdfExtractionError as error:
+            raise HTTPException(422, str(error)) from error
 
     @router.post("/transcribe")
     async def transcribe(

@@ -220,3 +220,66 @@ def test_qwen_thinking_options_and_response_separation(bridge, monkeypatch, enab
     )
     assert any(d.get("tool_calls") for d in deltas)
     assert events[-1]["usage"]["total_tokens"] == 15
+
+
+def make_pdf(pages: list[str]) -> bytes:
+    """Build a minimal valid PDF with one Helvetica text line per page."""
+    count = len(pages)
+    kids = " ".join(f"{3 + 2 * i} 0 R" for i in range(count))
+    objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        f"<< /Type /Pages /Kids [{kids}] /Count {count} >>",
+    ]
+    font = 3 + 2 * count
+    for i, text in enumerate(pages):
+        stream = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET" if text else ""
+        objects.append(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            f"/Resources << /Font << /F1 {font} 0 R >> >> /Contents {4 + 2 * i} 0 R >>"
+        )
+        objects.append(f"<< /Length {len(stream)} >>\nstream\n{stream}\nendstream")
+    objects.append("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    out = b"%PDF-1.4\n"
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{number} 0 obj\n{body}\nendobj\n".encode()
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    out += "".join(f"{offset:010d} 00000 n \n" for offset in offsets).encode()
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref}\n%%EOF\n"
+    ).encode()
+    return out
+
+
+def test_pdf_extract_returns_page_text_from_raw_bytes(bridge):
+    client, _, _ = bridge
+    pdf = make_pdf(["Quarterly revenue grew", "Second page notes", ""])
+    assert client.post("/agent/pdf/extract", content=pdf).status_code == 401
+    client.headers["Authorization"] = "Bearer secret"
+
+    full = client.post("/agent/pdf/extract", content=pdf).json()
+    assert full["total_pages"] == 3
+    assert [p["number"] for p in full["pages"]] == [1, 2, 3]
+    assert full["pages"][0]["text"] == "Quarterly revenue grew"
+    assert "No extractable text" in full["pages"][2]["text"]
+
+    window = client.post(
+        "/agent/pdf/extract?first_page=2&last_page=2", content=pdf
+    ).json()
+    assert window["first_page"] == window["last_page"] == 2
+    assert window["pages"] == [{"number": 2, "text": "Second page notes"}]
+
+
+def test_pdf_extract_rejects_invalid_input(bridge):
+    client, _, _ = bridge
+    client.headers["Authorization"] = "Bearer secret"
+    garbage = client.post("/agent/pdf/extract", content=b"not a pdf at all")
+    assert garbage.status_code == 422
+    out_of_range = client.post(
+        "/agent/pdf/extract?first_page=5", content=make_pdf(["Only page"])
+    )
+    assert out_of_range.status_code == 422
+    assert "out of range" in out_of_range.json()["detail"]

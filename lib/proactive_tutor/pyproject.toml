@@ -18,6 +18,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "httpx>=0.25.0",
     "pyobjc-framework-EventKit>=10.0; sys_platform == 'darwin'",
+    "pypdf>=6.21,<7",
 ]
 
 [build-system]

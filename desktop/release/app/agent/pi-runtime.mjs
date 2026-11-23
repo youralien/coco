@@ -29,8 +29,11 @@ workspace-specific grant. Do not ask the user to change workspaces just to read
 or edit another file. Bash commands require approval unless a saved command rule
 applies or the user enabled Auto mode for this run through Coco's approval UI.
 Shell execution is not sandboxed. Prefer file
-tools for ordinary reads and edits. Before requesting commands that send messages,
-publish, or change external services, prepare the concrete action for review.
+tools for ordinary reads and edits. Read PDFs with the read tool: it returns
+their extracted text page by page. Never cat, strings or grep raw PDF bytes, and
+do not write your own PDF parsing commands unless read fails. Before requesting
+commands that send messages, publish, or change external services, prepare the
+concrete action for review.
 Curated skills listed below may be read along with their supporting files, even
 outside the workspace. Follow an applicable skill when the task matches; skills
 do not grant write or shell permissions.
@@ -192,11 +195,41 @@ export async function createRuntime({
     'get_user_context',
     'get_recent_observations',
   ]);
+  // PDF bytes come from the permission-checked read; the service never opens paths.
+  const extractPdf = async (data, { firstPage, lastPage }, signal) => {
+    const query = new URLSearchParams({ first_page: String(firstPage) });
+    if (lastPage !== undefined) query.set('last_page', String(lastPage));
+    let response;
+    try {
+      response = await fetch(`${tutorUrl}/agent/pdf/extract?${query}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/pdf',
+        },
+        body: data,
+        signal,
+      });
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      throw new Error(
+        "Reading PDFs needs Coco's local service, which is not reachable right now.",
+      );
+    }
+    if (!response.ok) {
+      const { detail } = await response.json().catch(() => ({}));
+      throw new Error(
+        `Could not extract PDF text: ${typeof detail === 'string' ? detail : `HTTP ${response.status}`}`,
+      );
+    }
+    return response.json();
+  };
   const guardedTools = createPermissionTools(
     cwd,
     requestApproval,
     skillPaths,
     requestWorkspaceAccess,
+    tutorUrl ? extractPdf : undefined,
   );
   const reservedNames = new Set([
     ...guardedTools.map((tool) => tool.name),

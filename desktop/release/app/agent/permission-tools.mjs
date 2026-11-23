@@ -11,6 +11,12 @@ import {
   createLsTool,
   detectSupportedImageMimeTypeFromFile,
 } from '@earendil-works/pi-coding-agent';
+import {
+  guardRawPdfDumps,
+  isPdfFile,
+  pdfAwareGrep,
+  pdfAwareRead,
+} from './pdf-tools.mjs';
 
 /** Resolve existing ancestors too, so new files cannot escape via symlinks. */
 export function canonicalPath(target) {
@@ -62,6 +68,7 @@ export function createPermissionTools(
   requestApproval,
   skillPaths = [],
   requestWorkspaceAccess,
+  extractPdf,
 ) {
   const readableSkills = skillPaths.map((root) => fs.realpathSync(root));
   const within = (root, target) => {
@@ -79,14 +86,18 @@ export function createPermissionTools(
   // Each invocation receives its own scope. A one-time grant never leaks to
   // concurrent tools, later calls, sibling files, or another chat.
   const build = (check, checkRead, mkdir) => [
-    createReadTool(cwd, {
-      operations: {
-        readFile: async (target) => fs.promises.readFile(checkRead(target)),
-        access: async (target) => fs.promises.access(checkRead(target)),
-        detectImageMimeType: (target) =>
-          detectSupportedImageMimeTypeFromFile(checkRead(target)),
-      },
-    }),
+    pdfAwareRead(
+      createReadTool(cwd, {
+        operations: {
+          readFile: async (target) => fs.promises.readFile(checkRead(target)),
+          access: async (target) => fs.promises.access(checkRead(target)),
+          detectImageMimeType: (target) =>
+            detectSupportedImageMimeTypeFromFile(checkRead(target)),
+        },
+      }),
+      checkRead,
+      extractPdf,
+    ),
     createWriteTool(cwd, {
       operations: {
         writeFile: async (target, content) =>
@@ -104,12 +115,21 @@ export function createPermissionTools(
     }),
     // The SDK searches do not follow directory symlinks. Context reads are
     // checked again at use time, including paths discovered by grep.
-    createGrepTool(cwd, {
-      operations: {
-        isDirectory: (target) => fs.statSync(checkRead(target)).isDirectory(),
-        readFile: (target) => fs.readFileSync(checkRead(target), 'utf8'),
-      },
-    }),
+    // PDFs are skipped: their compressed bytes decode to garbage text.
+    pdfAwareGrep(
+      createGrepTool(cwd, {
+        operations: {
+          isDirectory: (target) => fs.statSync(checkRead(target)).isDirectory(),
+          readFile: async (target) => {
+            const resolved = checkRead(target);
+            if (await isPdfFile(resolved))
+              throw new Error('PDF text is not searchable with grep.');
+            return fs.promises.readFile(resolved, 'utf8');
+          },
+        },
+      }),
+      checkRead,
+    ),
     createFindTool(cwd),
     createLsTool(cwd, {
       operations: {
@@ -205,7 +225,9 @@ export function createPermissionTools(
           .execute(id, { ...approvedArgs, path: target }, signal, update);
       },
     })),
-    requireApproval(createBashTool(cwd), cwd, requestApproval),
+    guardRawPdfDumps(
+      requireApproval(createBashTool(cwd), cwd, requestApproval),
+    ),
   ];
 }
 
